@@ -35,3 +35,16 @@ export function lerFiltros(params: URLSearchParams) {
 
   return { inicio, fim, status: status || null };
 }
+
+export function lerInteiro(
+  params: URLSearchParams, nome: string,
+  padrao: number | null, min: number, max: number
+) {
+  const valor = params.get(nome);
+  if (valor === null || valor === '') return padrao;
+  const n = Number(valor);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    throw new ErroValidacao(`Parâmetro '${nome}' deve ser um número inteiro entre ${min} e ${max}.`);
+  }
+  return n;
+}
