@@ -1,6 +1,13 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from '@/components/ui/chart';
 import TabelaPedidos from './components/TabelaPedidos';
 import { moeda, ROTULO_STATUS } from '@/lib/formatar';
 
@@ -9,6 +16,11 @@ type Indicadores = { faturamento: number; total_pedidos: number; ticket_medio: n
 type PontoVenda = { periodo: string; pedidos: number; faturamento: number };
 type ItemStatus = { status: string; quantidade: number; valor: number };
 type ItemRanking = { id: number; nome: string; categoria: string; quantidade: number; faturamento: number };
+
+// configuração do gráfico no padrão do shadcn/ui (nome e cor de cada série)
+const configGrafico = {
+  faturamento: { label: 'Faturamento', color: 'var(--chart-2)' },
+} satisfies ChartConfig;
 
 function dataMenos(dias: number) {
   const d = new Date();
@@ -96,139 +108,189 @@ export default function Dashboard() {
     if (filtros) setFiltros({ ...filtros, [campo]: valor });
   };
 
+  const cardsIndicadores = indicadores
+    ? [
+        { titulo: 'Faturamento', valor: moeda(indicadores.faturamento) },
+        { titulo: 'Pedidos', valor: String(indicadores.total_pedidos) },
+        { titulo: 'Ticket médio', valor: moeda(indicadores.ticket_medio) },
+        {
+          titulo: 'Cancelados',
+          valor: String(indicadores.pedidos_cancelados),
+          extra: `${Number(indicadores.taxa_cancelamento).toLocaleString('pt-BR')}% dos pedidos`,
+        },
+      ]
+    : [];
+
   return (
     <main className="mx-auto max-w-6xl space-y-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold">Pediu Patrão - Dashboard Administrativo</h1>
-        <div className="flex items-center gap-3 text-gray-500">
-          <span>Atualizado às {atualizadoEm ? atualizadoEm.toLocaleTimeString('pt-BR') : '-'}</span>
-          <button onClick={carregar} disabled={carregando}>
-            {carregando ? 'Carregando...' : 'Atualizar'}
-          </button>
+        <div>
+          <h1 className="text-xl font-semibold">Pediu Patrão - Dashboard Administrativo</h1>
+          <p className="text-sm text-muted-foreground">
+            Atualizado às {atualizadoEm ? atualizadoEm.toLocaleTimeString('pt-BR') : '-'}
+          </p>
         </div>
+        <Button onClick={carregar} disabled={carregando}>
+          {carregando ? 'Carregando...' : 'Atualizar'}
+        </Button>
       </div>
 
       {filtros && (
-        <section className="caixa flex flex-wrap gap-4">
-          <label>
-            Data inicial
-            <input type="date" value={filtros.data_inicio} onChange={(e) => alterar('data_inicio', e.target.value)} />
-          </label>
-          <label>
-            Data final
-            <input type="date" value={filtros.data_fim} onChange={(e) => alterar('data_fim', e.target.value)} />
-          </label>
-          <label>
-            Status
-            <select value={filtros.status} onChange={(e) => alterar('status', e.target.value)}>
-              <option value="">Todos</option>
-              {Object.entries(ROTULO_STATUS).map(([valor, nome]) => (
-                <option key={valor} value={valor}>{nome}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Categoria
-            <select value={filtros.categoria} onChange={(e) => alterar('categoria', e.target.value)}>
-              <option value="">Todas</option>
-              {categorias.map((c) => (
-                <option key={c.id} value={c.id}>{c.nome}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Agrupar vendas por
-            <select value={filtros.agrupamento} onChange={(e) => alterar('agrupamento', e.target.value)}>
-              <option value="dia">Dia</option>
-              <option value="semana">Semana</option>
-              <option value="mes">Mês</option>
-            </select>
-          </label>
-        </section>
+        <Card>
+          <CardContent className="flex flex-wrap gap-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="data_inicio">Data inicial</Label>
+              <Input id="data_inicio" type="date" value={filtros.data_inicio}
+                onChange={(e) => alterar('data_inicio', e.target.value)} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="data_fim">Data final</Label>
+              <Input id="data_fim" type="date" value={filtros.data_fim}
+                onChange={(e) => alterar('data_fim', e.target.value)} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="status">Status</Label>
+              <NativeSelect id="status" value={filtros.status} onChange={(e) => alterar('status', e.target.value)}>
+                <NativeSelectOption value="">Todos</NativeSelectOption>
+                {Object.entries(ROTULO_STATUS).map(([valor, nome]) => (
+                  <NativeSelectOption key={valor} value={valor}>{nome}</NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="categoria">Categoria</Label>
+              <NativeSelect id="categoria" value={filtros.categoria} onChange={(e) => alterar('categoria', e.target.value)}>
+                <NativeSelectOption value="">Todas</NativeSelectOption>
+                {categorias.map((c) => (
+                  <NativeSelectOption key={c.id} value={c.id}>{c.nome}</NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="agrupamento">Agrupar vendas por</Label>
+              <NativeSelect id="agrupamento" value={filtros.agrupamento} onChange={(e) => alterar('agrupamento', e.target.value)}>
+                <NativeSelectOption value="dia">Dia</NativeSelectOption>
+                <NativeSelectOption value="semana">Semana</NativeSelectOption>
+                <NativeSelectOption value="mes">Mês</NativeSelectOption>
+              </NativeSelect>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
-      {erro && <p className="caixa text-red-700">Erro: {erro}</p>}
+      {erro && (
+        <Card className="border-destructive">
+          <CardContent className="text-sm text-destructive">Erro: {erro}</CardContent>
+        </Card>
+      )}
 
       {indicadores && (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div className="caixa">
-            <p className="text-gray-500">Faturamento</p>
-            <p className="text-2xl font-semibold">{moeda(indicadores.faturamento)}</p>
-          </div>
-          <div className="caixa">
-            <p className="text-gray-500">Pedidos</p>
-            <p className="text-2xl font-semibold">{indicadores.total_pedidos}</p>
-          </div>
-          <div className="caixa">
-            <p className="text-gray-500">Ticket médio</p>
-            <p className="text-2xl font-semibold">{moeda(indicadores.ticket_medio)}</p>
-          </div>
-          <div className="caixa">
-            <p className="text-gray-500">Cancelados</p>
-            <p className="text-2xl font-semibold">
-              {indicadores.pedidos_cancelados}{' '}
-              <span className="text-sm font-normal text-gray-500">
-                ({Number(indicadores.taxa_cancelamento).toLocaleString('pt-BR')}%)
-              </span>
-            </p>
-          </div>
+          {cardsIndicadores.map((c) => (
+            <Card key={c.titulo}>
+              <CardHeader>
+                <CardDescription>{c.titulo}</CardDescription>
+                <CardTitle className="text-2xl">{c.valor}</CardTitle>
+                {c.extra && <p className="text-xs text-muted-foreground">{c.extra}</p>}
+              </CardHeader>
+            </Card>
+          ))}
         </div>
       )}
 
-      <section className="caixa">
-        <h2>Faturamento por período</h2>
-        <div style={{ width: '100%', height: 280 }}>
-          <ResponsiveContainer>
+      <Card>
+        <CardHeader>
+          <CardTitle>Faturamento por período</CardTitle>
+          <CardDescription>Pedidos cancelados não entram no faturamento</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChartContainer config={configGrafico} className="h-[280px] w-full">
             <BarChart data={vendas}>
-              <CartesianGrid vertical={false} stroke="#eceef1" />
-              <XAxis dataKey="periodo" tickFormatter={dataBR} fontSize={12} />
-              <YAxis fontSize={12} />
-              <Tooltip labelFormatter={(p) => dataBR(String(p))} formatter={(v) => [moeda(Number(v)), 'Faturamento']} />
-              <Bar dataKey="faturamento" fill="#4a6fa5" />
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey="periodo" tickFormatter={dataBR} tickLine={false} axisLine={false} />
+              <YAxis tickLine={false} axisLine={false} width={50} />
+              <ChartTooltip
+                content={
+                  <ChartTooltipContent
+                    labelFormatter={(_, payload) => dataBR(String(payload?.[0]?.payload?.periodo ?? ''))}
+                    formatter={(valor) => (
+                      <div className="flex w-full justify-between gap-4">
+                        <span className="text-muted-foreground">Faturamento</span>
+                        <span className="font-medium">{moeda(Number(valor))}</span>
+                      </div>
+                    )}
+                  />
+                }
+              />
+              <Bar dataKey="faturamento" fill="var(--color-faturamento)" radius={4} />
             </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
+          </ChartContainer>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
-        <section className="caixa">
-          <h2>Pedidos por status</h2>
-          <table>
-            <thead>
-              <tr><th>Status</th><th>Qtd.</th><th>Valor</th></tr>
-            </thead>
-            <tbody>
-              {statusPedidos.map((s) => (
-                <tr key={s.status}>
-                  <td>{ROTULO_STATUS[s.status] ?? s.status}</td>
-                  <td>{s.quantidade}</td>
-                  <td>{moeda(s.valor)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Pedidos por status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Qtd.</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {statusPedidos.map((s) => (
+                  <TableRow key={s.status}>
+                    <TableCell>{ROTULO_STATUS[s.status] ?? s.status}</TableCell>
+                    <TableCell>{s.quantidade}</TableCell>
+                    <TableCell className="text-right">{moeda(s.valor)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
-        <section className="caixa">
-          <h2>Produtos mais vendidos</h2>
-          <table>
-            <thead>
-              <tr><th>#</th><th>Produto</th><th>Categoria</th><th>Qtd.</th><th>Faturamento</th></tr>
-            </thead>
-            <tbody>
-              {ranking.map((p, i) => (
-                <tr key={p.id}>
-                  <td>{i + 1}</td>
-                  <td>{p.nome}</td>
-                  <td>{p.categoria}</td>
-                  <td>{p.quantidade}</td>
-                  <td>{moeda(p.faturamento)}</td>
-                </tr>
-              ))}
-              {ranking.length === 0 && <tr><td colSpan={5}>Nenhum produto vendido no período.</td></tr>}
-            </tbody>
-          </table>
-        </section>
+        <Card>
+          <CardHeader>
+            <CardTitle>Produtos mais vendidos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>Produto</TableHead>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead>Qtd.</TableHead>
+                  <TableHead className="text-right">Faturamento</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ranking.map((p, i) => (
+                  <TableRow key={p.id}>
+                    <TableCell>{i + 1}</TableCell>
+                    <TableCell>{p.nome}</TableCell>
+                    <TableCell>{p.categoria}</TableCell>
+                    <TableCell>{p.quantidade}</TableCell>
+                    <TableCell className="text-right">{moeda(p.faturamento)}</TableCell>
+                  </TableRow>
+                ))}
+                {ranking.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                      Nenhum produto vendido no período.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
 
       {filtros && (
