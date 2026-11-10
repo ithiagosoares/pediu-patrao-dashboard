@@ -1,69 +1,244 @@
-import Image from "next/image";
+'use client';
+import { useCallback, useEffect, useState } from 'react';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import TabelaPedidos from './components/TabelaPedidos';
+import { moeda, ROTULO_STATUS } from '@/lib/formatar';
 
-export default function Home() {
+type Filtros = { data_inicio: string; data_fim: string; status: string; categoria: string; agrupamento: string };
+type Indicadores = { faturamento: number; total_pedidos: number; ticket_medio: number; pedidos_cancelados: number; taxa_cancelamento: number };
+type PontoVenda = { periodo: string; pedidos: number; faturamento: number };
+type ItemStatus = { status: string; quantidade: number; valor: number };
+type ItemRanking = { id: number; nome: string; categoria: string; quantidade: number; faturamento: number };
+
+function dataMenos(dias: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - dias);
+  return d.toLocaleDateString('sv-SE'); // formato AAAA-MM-DD
+}
+
+// "2026-11-08" -> "08/11"
+function dataBR(periodo: string) {
+  const [, mes, dia] = periodo.split('-');
+  return `${dia}/${mes}`;
+}
+
+async function buscar(url: string) {
+  const resposta = await fetch(url, { cache: 'no-store' });
+  const json = await resposta.json();
+  if (!resposta.ok) throw new Error(json.erro ?? 'Erro ao carregar os dados.');
+  return json;
+}
+
+export default function Dashboard() {
+  const [filtros, setFiltros] = useState<Filtros | null>(null);
+  const [categorias, setCategorias] = useState<{ id: number; nome: string }[]>([]);
+  const [indicadores, setIndicadores] = useState<Indicadores | null>(null);
+  const [vendas, setVendas] = useState<PontoVenda[]>([]);
+  const [statusPedidos, setStatusPedidos] = useState<ItemStatus[]>([]);
+  const [ranking, setRanking] = useState<ItemRanking[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
+
+  // as datas padrão são calculadas só no navegador, ao abrir a página
+  useEffect(() => {
+    setFiltros({ data_inicio: dataMenos(30), data_fim: dataMenos(0), status: '', categoria: '', agrupamento: 'dia' });
+    buscar('/api/categorias').then((j) => setCategorias(j.dados)).catch(() => setCategorias([]));
+  }, []);
+
+  const carregar = useCallback(async () => {
+    if (!filtros) return;
+
+    setCarregando(true);
+    setErro(null);
+
+    const periodo = new URLSearchParams({ data_inicio: filtros.data_inicio, data_fim: filtros.data_fim });
+
+    const comStatus = new URLSearchParams(periodo);
+    if (filtros.status) comStatus.set('status', filtros.status);
+
+    const qsVendas = new URLSearchParams(comStatus);
+    qsVendas.set('agrupamento', filtros.agrupamento);
+
+    const qsRanking = new URLSearchParams(periodo);
+    qsRanking.set('limite', '10');
+    if (filtros.categoria) qsRanking.set('categoria', filtros.categoria);
+
+    try {
+      const [ind, ven, sta, ran] = await Promise.all([
+        buscar(`/api/dashboard/indicadores?${comStatus}`),
+        buscar(`/api/dashboard/vendas?${qsVendas}`),
+        buscar(`/api/dashboard/pedidos-status?${periodo}`),
+        buscar(`/api/dashboard/produtos-mais-vendidos?${qsRanking}`),
+      ]);
+      setIndicadores(ind.dados);
+      setVendas(ven.dados);
+      setStatusPedidos(sta.dados);
+      setRanking(ran.dados);
+      setAtualizadoEm(new Date());
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setCarregando(false);
+    }
+  }, [filtros]);
+
+  // carrega ao abrir e sempre que um filtro muda
+  useEffect(() => { carregar(); }, [carregar]);
+
+  // RF07: atualização automática a cada 60 segundos
+  useEffect(() => {
+    const id = setInterval(carregar, 60_000);
+    return () => clearInterval(id);
+  }, [carregar]);
+
+  const alterar = (campo: keyof Filtros, valor: string) => {
+    if (filtros) setFiltros({ ...filtros, [campo]: valor });
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="mx-auto max-w-6xl space-y-4 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-xl font-semibold">Pediu Patrão - Dashboard Administrativo</h1>
+        <div className="flex items-center gap-3 text-gray-500">
+          <span>Atualizado às {atualizadoEm ? atualizadoEm.toLocaleTimeString('pt-BR') : '-'}</span>
+          <button onClick={carregar} disabled={carregando}>
+            {carregando ? 'Carregando...' : 'Atualizar'}
+          </button>
+        </div>
+      </div>
+
+      {filtros && (
+        <section className="caixa flex flex-wrap gap-4">
+          <label>
+            Data inicial
+            <input type="date" value={filtros.data_inicio} onChange={(e) => alterar('data_inicio', e.target.value)} />
+          </label>
+          <label>
+            Data final
+            <input type="date" value={filtros.data_fim} onChange={(e) => alterar('data_fim', e.target.value)} />
+          </label>
+          <label>
+            Status
+            <select value={filtros.status} onChange={(e) => alterar('status', e.target.value)}>
+              <option value="">Todos</option>
+              {Object.entries(ROTULO_STATUS).map(([valor, nome]) => (
+                <option key={valor} value={valor}>{nome}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Categoria
+            <select value={filtros.categoria} onChange={(e) => alterar('categoria', e.target.value)}>
+              <option value="">Todas</option>
+              {categorias.map((c) => (
+                <option key={c.id} value={c.id}>{c.nome}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Agrupar vendas por
+            <select value={filtros.agrupamento} onChange={(e) => alterar('agrupamento', e.target.value)}>
+              <option value="dia">Dia</option>
+              <option value="semana">Semana</option>
+              <option value="mes">Mês</option>
+            </select>
+          </label>
+        </section>
+      )}
+
+      {erro && <p className="caixa text-red-700">Erro: {erro}</p>}
+
+      {indicadores && (
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="caixa">
+            <p className="text-gray-500">Faturamento</p>
+            <p className="text-2xl font-semibold">{moeda(indicadores.faturamento)}</p>
+          </div>
+          <div className="caixa">
+            <p className="text-gray-500">Pedidos</p>
+            <p className="text-2xl font-semibold">{indicadores.total_pedidos}</p>
+          </div>
+          <div className="caixa">
+            <p className="text-gray-500">Ticket médio</p>
+            <p className="text-2xl font-semibold">{moeda(indicadores.ticket_medio)}</p>
+          </div>
+          <div className="caixa">
+            <p className="text-gray-500">Cancelados</p>
+            <p className="text-2xl font-semibold">
+              {indicadores.pedidos_cancelados}{' '}
+              <span className="text-sm font-normal text-gray-500">
+                ({Number(indicadores.taxa_cancelamento).toLocaleString('pt-BR')}%)
+              </span>
+            </p>
+          </div>
+        </div>
+      )}
+
+      <section className="caixa">
+        <h2>Faturamento por período</h2>
+        <div style={{ width: '100%', height: 280 }}>
+          <ResponsiveContainer>
+            <BarChart data={vendas}>
+              <CartesianGrid vertical={false} stroke="#eceef1" />
+              <XAxis dataKey="periodo" tickFormatter={dataBR} fontSize={12} />
+              <YAxis fontSize={12} />
+              <Tooltip labelFormatter={(p) => dataBR(String(p))} formatter={(v) => [moeda(Number(v)), 'Faturamento']} />
+              <Bar dataKey="faturamento" fill="#4a6fa5" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
+        <section className="caixa">
+          <h2>Pedidos por status</h2>
+          <table>
+            <thead>
+              <tr><th>Status</th><th>Qtd.</th><th>Valor</th></tr>
+            </thead>
+            <tbody>
+              {statusPedidos.map((s) => (
+                <tr key={s.status}>
+                  <td>{ROTULO_STATUS[s.status] ?? s.status}</td>
+                  <td>{s.quantidade}</td>
+                  <td>{moeda(s.valor)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+
+        <section className="caixa">
+          <h2>Produtos mais vendidos</h2>
+          <table>
+            <thead>
+              <tr><th>#</th><th>Produto</th><th>Categoria</th><th>Qtd.</th><th>Faturamento</th></tr>
+            </thead>
+            <tbody>
+              {ranking.map((p, i) => (
+                <tr key={p.id}>
+                  <td>{i + 1}</td>
+                  <td>{p.nome}</td>
+                  <td>{p.categoria}</td>
+                  <td>{p.quantidade}</td>
+                  <td>{moeda(p.faturamento)}</td>
+                </tr>
+              ))}
+              {ranking.length === 0 && <tr><td colSpan={5}>Nenhum produto vendido no período.</td></tr>}
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      {filtros && (
+        <TabelaPedidos
+          data_inicio={filtros.data_inicio}
+          data_fim={filtros.data_fim}
+          status={filtros.status}
+          atualizadoEm={atualizadoEm}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      )}
+    </main>
   );
 }

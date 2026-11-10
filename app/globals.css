@@ -1,26 +1,72 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #f4f5f7;
+  color: #222;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 14px;
+}
+
+/* bloco branco simples usado em cada seção */
+.caixa {
+  background: #fff;
+  border: 1px solid #dcdfe4;
+  border-radius: 4px;
+  padding: 16px;
+}
+
+h2 {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+th,
+td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid #eceef1;
+}
+
+th {
+  color: #666;
+  font-weight: 600;
+  border-bottom: 1px solid #dcdfe4;
+}
+
+input,
+select {
+  border: 1px solid #c8ccd2;
+  border-radius: 4px;
+  padding: 5px 8px;
+  background: #fff;
+}
+
+button {
+  border: 1px solid #c8ccd2;
+  border-radius: 4px;
+  padding: 5px 12px;
+  background: #fff;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #f0f1f3;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #555;
 }
