@@ -40,3 +40,8 @@ create table itens_pedido (
 create index on pedidos(criado_em);
 create index on pedidos(status);
 create index on itens_pedido(produto_id);
+-- permissoes: somente a role do servidor acessa as tabelas
+grant usage on schema public to service_role;
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;
+grant execute on all functions in schema public to service_role;
